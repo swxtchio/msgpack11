@@ -177,13 +177,13 @@ public:
         ss << *this;
         out = ss.str();
     }
-    
+
     std::string dump() const {
         std::stringstream ss;
         ss << *this;
         return ss.str();
     }
-    
+
     friend std::ostream& operator<<(std::ostream& os, const MsgPack& msgpack);
     // Parse. If parse fails, set msgpack to MsgPack() and
     // sets failbit on stream.
@@ -233,6 +233,12 @@ public:
      */
     typedef std::initializer_list<std::pair<std::string, Type>> shape;
     bool has_shape(const shape & types, std::string & err) const;
+
+    std::string ToString() const;
+    static std::string ToString(const MsgPack::object& value);
+    static std::string ToString(const MsgPack::array& value);
+    static std::string ToString(const MsgPack::binary& value);
+    static std::string ToString(const MsgPack::extension& value);
 
 private:
     std::shared_ptr<MsgPackValue> m_ptr;

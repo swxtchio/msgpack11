@@ -795,17 +795,17 @@ namespace {
  */
 namespace MsgPackParser {
     MsgPack parse_msgpack(std::istream& is, int depth);
-    
+
     template< typename T >
     void read_bytes(std::istream& is, T& bytes)
     {
         static_assert(std::is_fundamental<T>::value,
             "byte read not guaranteed for non-primitive types");
         int n = sizeof(T);
-        
+
         int const offsets[] = {(n-1), 0};
         int const directions[] = {-1, 1};
-        
+
         uint8_t* dst_ptr = reinterpret_cast<uint8_t*>(&bytes) + offsets[static_cast<int>(is_big_endian)];
         int const dir = directions[static_cast<int>(is_big_endian)];
         for(int i = 0; i < n; ++i)
@@ -813,7 +813,7 @@ namespace MsgPackParser {
             *dst_ptr = is.get();
             dst_ptr += dir;
         }
-        
+
         // NB: if the read fails it's prefered to return 0 rather than
         //      corrupted value, for example in the case of reading data size.
         if (is.fail() || is.eof()) {
@@ -1015,15 +1015,15 @@ namespace MsgPackParser {
             // "exceeded maximum nesting depth."
             return fail(is);
         }
-        
+
         uint8_t const first_byte = is.get();
         // check for fail/eof after get() as eof only set after read past the end
         if (is.fail() || is.eof()) {
             return fail(is);
         }
-        
+
         MsgPack ret = (*parsers[first_byte])(is, first_byte, depth + 1);
-        
+
         if (is.fail() || is.eof()) {
             return fail(is);
         }
@@ -1062,7 +1062,7 @@ vector<MsgPack> MsgPack::parse_multi(const string &in,
                                      std::string::size_type &parser_stop_pos,
                                      string &err) {
     std::stringstream ss(in);
-    
+
     vector<MsgPack> msgpack_vec;
     while (static_cast<size_t>(ss.tellg()) != in.size() && !ss.eof() && !ss.fail()) {
         auto next = MsgPack::parse(ss, err);
@@ -1071,7 +1071,7 @@ vector<MsgPack> MsgPack::parse_multi(const string &in,
             parser_stop_pos = ss.tellg();
         }
     }
-        
+
     return msgpack_vec;
 }
 
@@ -1093,6 +1093,109 @@ bool MsgPack::has_shape(const shape & types, string & err) const {
     }
 
     return true;
+}
+
+std::string MsgPack::ToString() const {
+    if (this->is_string()) {
+        return "'" + this->string_value() + "'";
+    }
+    if (this->is_int8() || this->is_int16() || this->is_int32() || this->is_int64()) {
+        return std::to_string(this->int64_value());
+    }
+    if (this->is_uint8() || this->is_uint16() || this->is_uint32() || this->is_uint64()) {
+        return std::to_string(this->uint64_value());
+    }
+    if (this->is_float32() || this->is_float64()) {
+        return std::to_string(this->number_value());
+    }
+    if (this->is_bool()) {
+        if (this->bool_value()) {
+            return "true";
+        } else {
+            return "false";
+        }
+    }
+    if (this->is_null()) {
+        return "null";
+    }
+    if (this->is_array()) {
+        std::string Result = "[";
+        const auto value = this->array_items();
+        std::for_each(std::begin(value), std::end(value),
+                      [&Result](MsgPack::array::value_type const& v) {
+                          if (Result.size() > 0) {
+                              Result += ",";
+                          }
+                          Result += v.ToString();
+                      });
+        Result += "]";
+        return Result;
+    }
+    if (this->is_object()) {
+        std::string Result = "{";
+        const auto value = this->object_items();
+        std::for_each(std::begin(value), std::end(value),
+                      [&Result](MsgPack::object::value_type const& v) {
+                          if (Result.size() > 1) {
+                              Result += ",";
+                          }
+                          Result += v.first.ToString();
+                          Result += ":";
+                          Result += v.second.ToString();
+                      });
+        Result += "}";
+        return Result;
+    }
+    if (this->is_binary()) {
+        return "bin[" + std::to_string(this->binary_items().size()) + "]";
+    }
+    if (this->is_extension()) {
+        const auto value = this->extension_items();
+        const uint8_t type = std::get<0>(value);
+        const MsgPack::binary& data = std::get<1>(value);
+        const size_t len = data.size();
+        return "ext[" + std::to_string(type) + "," + std::to_string(len) + "]";
+    }
+    return "<" + std::to_string(this->type()) + ">";
+}
+
+std::string ToString(const MsgPack::object& value) {
+    std::string Result = "{";
+    std::for_each(std::begin(value), std::end(value),
+                  [&Result](MsgPack::object::value_type const& v) {
+                      if (Result.size() > 0) {
+                          Result += ",";
+                      }
+                      Result += v.first.ToString();
+                      Result += ":";
+                      Result += v.second.ToString();
+                  });
+    Result += "}";
+    return Result;
+}
+
+std::string ToString(const MsgPack::array& value) {
+    std::string Result = "[";
+    std::for_each(std::begin(value), std::end(value),
+                  [&Result](MsgPack::array::value_type const& v) {
+                      if (Result.size() > 0) {
+                          Result += ",";
+                      }
+                      Result += v.ToString();
+                  });
+    Result += "]";
+    return Result;
+}
+
+std::string ToString(const MsgPack::binary& value) {
+    return "bin[" + std::to_string(value.size()) + "]";
+}
+
+std::string ToString(const MsgPack::extension& value) {
+    const uint8_t type = std::get<0>(value);
+    const MsgPack::binary& data = std::get<1>(value);
+    const size_t len = data.size();
+    return "ext[" + std::to_string(type) + "," + std::to_string(len) + "]";
 }
 
 } // namespace msgpack11
